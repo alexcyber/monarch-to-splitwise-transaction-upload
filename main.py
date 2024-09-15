@@ -137,30 +137,17 @@ async def main():
     # compose expense information format
     '''
         users =  [{"name": "Alex",
-                   "userId": 28199,
+                   "userId": 9999,
                    "paid-share": 100,
                    "owed-share": 20.0
                    },
                 ...]
     '''
+    #Single Entry
+    detailed_transactions = [{'getTransaction': {'id': '185591663350027360', 'amount': -143.99, 'pending': False, 'isRecurring': True, 'date': '2024-08-08', 'originalDate': '2024-08-08', 'hideFromReports': False, 'needsReview': False, 'reviewedAt': None, 'reviewedByUser': None, 'plaidName': 'PUGET SOUND ENERGY INC 8882255773 WA', 'notes': None, 'hasSplitTransactions': False, 'isSplitTransaction': False, 'isManual': False, 'splitTransactions': [], 'originalTransaction': None, 'attachments': [], 'account': {'id': '164782108102923413', 'displayName': 'Citi Double Cash Card (...5839)', 'logoUrl': 'https://api.monarchmoney.com/cdn-cgi/image/width=128/images/institution/75111197916293981', 'mask': '5839', 'subtype': {'display': 'Credit Card', '__typename': 'AccountSubtype'}, '__typename': 'Account'}, 'category': {'id': '164780499636622560', '__typename': 'Category'}, 'goal': None, 'merchant': {'id': '169404276032968665', 'name': 'Puget Sound Energy', 'transactionCount': 8, 'logoUrl': 'https://res.cloudinary.com/monarch-money/image/authenticated/s--e6vdkz2z--/c_thumb,h_132,w_132/v1/production/merchant_logos/provider/MCH-b848a1c0-f1a1-b4c6-7b35-69bec5e0c1fc_ajvzon', 'recurringTransactionStream': {'id': '177093911657878652', '__typename': 'RecurringTransactionStream'}, '__typename': 'Merchant'}, 'tags': [{'id': '187656425668908411', 'name': 'Not In Splitwise', 'color': '#FF7369', 'order': 4, '__typename': 'TransactionTag'}, {'id': '164780499603068103', 'name': 'Their Amount - Shared Expense', 'color': '#F0648C', 'order': 1, '__typename': 'TransactionTag'}, {'id': '188004390170301969', 'name': 'Justin', 'color': '#6E87F0', 'order': 7, '__typename': 'TransactionTag'}, {'id': '188005411499054762', 'name': 'test', 'color': '#91DCEB', 'order': 10, '__typename': 'TransactionTag'}, {'id': '188006571569092387', 'name': 'Roy', 'color': '#6E87F0', 'order': 9, '__typename': 'TransactionTag'}, {'id': '188006554659755809', 'name': 'Jewel', 'color': '#6E87F0', 'order': 8, '__typename': 'TransactionTag'}, {'id': '188004120976725480', 'name': 'Laurel', 'color': '#6E87F0', 'order': 6, '__typename': 'TransactionTag'}, {'id': '188017050885592410', 'name': 'Alex', 'color': '#6E87F0', 'order': 12, '__typename': 'TransactionTag'}], 'needsReviewByUser': None, '__typename': 'Transaction'}, 'myHousehold': {'users': [{'id': '164780499553446446', 'name': 'Alex Molina', '__typename': 'User'}], '__typename': 'Household'}}]
 
     
-    '''
-    Temp line
-    '''
-    #Single Entry
-    # detailed_transactions = [{'getTransaction': {'id': '185591663350027360', 'amount': -143.99, 'pending': False, 'isRecurring': True, 'date': '2024-08-08', 'originalDate': '2024-08-08', 'hideFromReports': False, 'needsReview': False, 'reviewedAt': None, 'reviewedByUser': None, 'plaidName': 'PUGET SOUND ENERGY INC 8882255773 WA', 'notes': None, 'hasSplitTransactions': False, 'isSplitTransaction': False, 'isManual': False, 'splitTransactions': [], 'originalTransaction': None, 'attachments': [], 'account': {'id': '164782108102923413', 'displayName': 'Citi Double Cash Card (...5839)', 'logoUrl': 'https://api.monarchmoney.com/cdn-cgi/image/width=128/images/institution/75111197916293981', 'mask': '5839', 'subtype': {'display': 'Credit Card', '__typename': 'AccountSubtype'}, '__typename': 'Account'}, 'category': {'id': '164780499636622560', '__typename': 'Category'}, 'goal': None, 'merchant': {'id': '169404276032968665', 'name': 'Puget Sound Energy', 'transactionCount': 8, 'logoUrl': 'https://res.cloudinary.com/monarch-money/image/authenticated/s--e6vdkz2z--/c_thumb,h_132,w_132/v1/production/merchant_logos/provider/MCH-b848a1c0-f1a1-b4c6-7b35-69bec5e0c1fc_ajvzon', 'recurringTransactionStream': {'id': '177093911657878652', '__typename': 'RecurringTransactionStream'}, '__typename': 'Merchant'}, 'tags': [{'id': '187656425668908411', 'name': 'Not In Splitwise', 'color': '#FF7369', 'order': 4, '__typename': 'TransactionTag'}, {'id': '164780499603068103', 'name': 'Their Amount - Shared Expense', 'color': '#F0648C', 'order': 1, '__typename': 'TransactionTag'}, {'id': '188004390170301969', 'name': 'Justin', 'color': '#6E87F0', 'order': 7, '__typename': 'TransactionTag'}, {'id': '188005411499054762', 'name': 'test', 'color': '#91DCEB', 'order': 10, '__typename': 'TransactionTag'}, {'id': '188006571569092387', 'name': 'Roy', 'color': '#6E87F0', 'order': 9, '__typename': 'TransactionTag'}, {'id': '188006554659755809', 'name': 'Jewel', 'color': '#6E87F0', 'order': 8, '__typename': 'TransactionTag'}, {'id': '188004120976725480', 'name': 'Laurel', 'color': '#6E87F0', 'order': 6, '__typename': 'TransactionTag'}, {'id': '188017050885592410', 'name': 'Alex', 'color': '#6E87F0', 'order': 12, '__typename': 'TransactionTag'}], 'needsReviewByUser': None, '__typename': 'Transaction'}, 'myHousehold': {'users': [{'id': '164780499553446446', 'name': 'Alex Molina', '__typename': 'User'}], '__typename': 'Household'}}]
-    #Split Entry
-    # detailed_transactions = [{'getTransaction': {'id': '185517026045891686', 'amount': -85.0, 'pending': False, 'isRecurring': True, 'date': '2024-08-07', 'originalDate': '2024-08-07', 'hideFromReports': False, 'needsReview': True, 'reviewedAt': None, 'reviewedByUser': None, 'plaidName': 'ZIPLY FIBER * INTERNET 866-699-4759 WA', 'notes': None, 'hasSplitTransactions': True, 'isSplitTransaction': False, 'isManual': False, 'splitTransactions': [{'id': '188010689083774962', 'amount': -17.0, 'merchant': {'id': '164782157222418054', 'name': 'Ziply Fiber', '__typename': 'Merchant'}, 'category': {'id': '164780499636622561', 'name': 'Internet & Cable', '__typename': 'Category'}, '__typename': 'Transaction'}, {'id': '188010689083774963', 'amount': -68.0, 'merchant': {'id': '164782157222418054', 'name': 'Ziply Fiber', '__typename': 'Merchant'}, 'category': {'id': '164780499636622561', 'name': 'Internet & Cable', '__typename': 'Category'}, '__typename': 'Transaction'}], 'originalTransaction': None, 'attachments': [], 'account': {'id': '164782108102923413', 'displayName': 'Citi Double Cash Card (...5839)', 'logoUrl': 'https://api.monarchmoney.com/cdn-cgi/image/width=128/images/institution/75111197916293981', 'mask': '5839', 'subtype': {'display': 'Credit Card', '__typename': 'AccountSubtype'}, '__typename': 'Account'}, 'category': {'id': '164780499636622561', '__typename': 'Category'}, 'goal': None, 'merchant': {'id': '164782157222418054', 'name': 'Ziply Fiber', 'transactionCount': 20, 'logoUrl': 'https://res.cloudinary.com/monarch-money/image/authenticated/s--cLOUARH6--/c_thumb,h_132,w_132/v1/production/merchant_logos/provider/MCH-c87f7b19-4f2c-447e-a137-c2edb0396f40_eyxz9m', 'recurringTransactionStream': {'id': '164782279828215267', '__typename': 'RecurringTransactionStream'}, '__typename': 'Merchant'}, 'tags': [{'id': '187656425668908411', 'name': 'Not In Splitwise', 'color': '#FF7369', 'order': 4, '__typename': 'TransactionTag'}, {'id': '164780499603068103', 'name': 'Their Amount - Shared Expense', 'color': '#F0648C', 'order': 1, '__typename': 'TransactionTag'}, {'id': '188004390170301969', 'name': 'Justin', 'color': '#6E87F0', 'order': 7, '__typename': 'TransactionTag'}, {'id': '188006571569092387', 'name': 'Roy', 'color': '#6E87F0', 'order': 9, '__typename': 'TransactionTag'}, {'id': '188006554659755809', 'name': 'Jewel', 'color': '#6E87F0', 'order': 8, '__typename': 'TransactionTag'}, {'id': '188004120976725480', 'name': 'Laurel', 'color': '#6E87F0', 'order': 6, '__typename': 'TransactionTag'}], 'needsReviewByUser': None, '__typename': 'Transaction'}, 'myHousehold': {'users': [{'id': '164780499553446446', 'name': 'Alex Molina', '__typename': 'User'}], '__typename': 'Household'}}]
-    '''
-    /Temp line
-    '''
-    
-    
     for transaction in reversed(detailed_transactions):
-        
-        # print(transaction)
-        # print("\n")
         expense_details = {
                         "modified_transactions": [transaction['getTransaction']['id']],
                         "description" : None,
@@ -260,11 +247,4 @@ async def main():
                   
                   {expense_details}''')
 
-        
-        
-
-    
-
-
 asyncio.run(main())
-

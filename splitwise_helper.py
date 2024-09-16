@@ -3,14 +3,6 @@ from splitwise.expense import Expense
 from splitwise.expense import ExpenseUser
 
 
-# def __init__(self, sw):
-#     self.consumer_key = consumer_key
-#     self.consumer_secret = consumer_secret
-#     self.api_key = api_key
-    
-#     # print(f"consumer_key {consumer_key}, consumer_secret {consumer_secret}, api_key {api_key}")
-#     self.sw = sw
-
 def get_friends(sw):
     return sw.getFriends()
 

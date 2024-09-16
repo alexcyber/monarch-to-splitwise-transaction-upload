@@ -11,6 +11,7 @@ async def login(mm):
     except Exception as e:
         print(e)
         await mm.interactive_login()
+    return mm
 
 
 async def get_tags(mm):

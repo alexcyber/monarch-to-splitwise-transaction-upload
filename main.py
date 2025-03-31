@@ -21,7 +21,7 @@ class Main():
 
         
     def load_config(self):
-        if "isLambda" in os.environ:
+        if "isLambda" in os.environ and os.environ['isLambda']:
             config = {}
             config['sw_consumer_key'] = os.getenv("sw_consumer_key")
             config['sw_consumer_secret'] = os.getenv("sw_consumer_secret")
@@ -31,15 +31,21 @@ class Main():
                 config = yaml.safe_load(file)
         return config 
 
+
     async def initialize_monarch(self):
         mm = MonarchMoney()
-        mm = await mhelper.login(mm)
+        mm._headers['Device-UUID'] = self.config['monarch_device_uuid'] # See https://github.com/hammem/monarchmoney/issues/137 for additional information
+        credentials = {"username": self.config['monarch_user_email'],
+                       "password": self.config['monarch_user_password']}
+        mm = await mhelper.login(mm, credentials)
         return mm
+
 
     def initialize_splitwise(self):
         return Splitwise(self.config['sw_consumer_key'], 
                       self.config['sw_consumer_secret'], 
                       api_key=self.config['sw_api_key'])
+
 
     async def get_monarch_data(self): 
         '''
@@ -61,9 +67,10 @@ class Main():
         # From the transactions found, create an array contained detailed information of each transaction
         detailed_transactions = await mhelper.convert_transactions_to_parent_detailed_transactions(self.mm, transactions)
         return detailed_transactions, tags
-
-    #Takes a detailed monarch transaction and calculates what each user owes
-    async def calculate_sw_user_amount(self, transaction, group_member_info):    
+    
+    
+    async def calculate_sw_user_amount(self, transaction, group_member_info):
+        '''Takes a detailed monarch transaction and calculates what each user owes'''    
         user_entry = [] #list of complete expense entries for a user
         names = [] # List of all names associated with a particular transaction
         counter = 0
@@ -71,7 +78,8 @@ class Main():
         if transaction['getTransaction']['hasSplitTransactions']:
             for transaction in transaction['getTransaction']['splitTransactions']:
                 transaction =  await self.mm.get_transaction_details(transaction['id'])
-                user_entry.append(await self.calculate_sw_user_amount(transaction, self.config['key_tag_colors'], group_member_info))
+                user_entry.append(await self.calculate_sw_user_amount(transaction, group_member_info))
+                #user_entry.append(await self.calculate_sw_user_amount(transaction, self.config['key_tag_colors'], group_member_info))
                 ### Need additional code to combine users into just one entity
         else:
             for tag in transaction['getTransaction']['tags']:
@@ -108,14 +116,58 @@ class Main():
         else:
             flat_user_entry = user_entry
         return flat_user_entry
-
+    
+    
     # Calculates the amount each person owes    
-    def calculate_shares(self, money,n):
-        q = round((round((money * 100), 0) // n) / 100, 2)  # quotient
-        r = int(money * 100 % n)                  # remainder
-        q1 = round(q + 0.01, 2)                   # quotient + 0.01
-        result = [q1] * r + [q] * (n-r)
-        return sorted(result, key=lambda x: random.random())       
+    def calculate_shares(self, money, n):
+        money_cents = int(round(money * 100,0))
+        lower_bound_cents = int(money_cents // n)
+        upper_bound_cents = lower_bound_cents + 1
+        remaining_cents = money_cents - (n * lower_bound_cents)
+        result = [lower_bound_cents] * (n - remaining_cents) + [upper_bound_cents] * remaining_cents
+        result =  [round(x / 100, 2) for x in result]
+        return sorted(result, key=lambda x: random.random())
+
+
+    async def get_groupId_transaction(self, transaction):
+        '''Determines which transaction to use for SW group information'''
+        if transaction['getTransaction']['hasSplitTransactions']:
+                child_transaction = transaction['getTransaction']['splitTransactions'][0]
+                groupId_transaction = await self.mm.get_transaction_details(child_transaction['id'])
+        else:
+            groupId_transaction = transaction
+        return groupId_transaction
+    
+    
+    async def get_group_metadata(self, groups, transaction):
+        '''For a specific SW group tag, get id, name, transaction  and members'''
+        # If the transaction has been split, take the groupId of the first child object.
+        # This is because the parent object cannot be edited once split.  Child's can be
+        groupId_transaction = await self.get_groupId_transaction(transaction)
+        
+        for tag in groupId_transaction['getTransaction']['tags']:
+            if tag['color'] == self.config['key_tag_colors']['splitwise-group']: # If the transaction tag matches a the splitwise group color
+                for key, value in groups.items(): # Iterate through SW groups
+                    if key == tag['name']: # If SW group name matches Monarch tag
+                        group_id = value['groupId'] # Add SW groupID to expense_details
+                        group_name = key
+                        group_member_info = value['members'] # Variable contains the SW group member names and ID's
+                        return group_id, group_name, group_member_info, groupId_transaction
+              
+                    
+    def get_sw_groups(self):
+        '''Get splitwise group information'''
+        # Creates a dictionary of groups and their members
+        # {Flirt Fund: {groupId: "XXXX", members: [{first_name: "XXXX", memberid: 000}, etc] }
+        groups = {}
+        original_groups = self.sw.getGroups()
+        for group in original_groups:
+            groups[group.name] = {"groupId": group.id, "members": []}
+            for member in group.members:
+                memberdic = {"first_name": member.first_name, "memberId": member.id}
+                groups[group.name]['members'].append(memberdic)
+        return groups
+
 
     async def main(self):
         detailed_transactions, tags = await self.get_monarch_data()
@@ -126,13 +178,7 @@ class Main():
         
         # Creates a dictionary of groups and their members
         # {Flirt Fund: {groupId: "XXXX", members: [{first_name: "XXXX", memberid: 000}, etc] }
-        groups = {}
-        original_groups = self.sw.getGroups()
-        for group in original_groups:
-            groups[group.name] = {"groupId": group.id, "members": []}
-            for member in group.members:
-                memberdic = {"first_name": member.first_name, "memberId": member.id}
-                groups[group.name]['members'].append(memberdic)
+        groups = self.get_sw_groups()
         
         
         # compose expense information format
@@ -169,22 +215,7 @@ class Main():
             - Pulls the monarch tag that contains the SW group name.  Add SW groupID to expense_details
             - Once the group has been identified, pull SW memberId's to be used when assigning individual expenses 
             '''
-            group_member_info = None
-            # If the transaction has been split, take the groupId of the first child object.
-            # This is because the parent object cannot be edited once split.  Child's can be
-            if transaction['getTransaction']['hasSplitTransactions']:
-                child_transaction = transaction['getTransaction']['splitTransactions'][0]
-                groupId_info = await self.mm.get_transaction_details(child_transaction['id'])
-            else:
-                groupId_info = transaction
-            for tag in groupId_info['getTransaction']['tags']:
-                if tag['color'] == self.config['key_tag_colors']['splitwise-group']: # If the transaction tag matches a the splitwise group color
-                    for key, value in groups.items(): # Iterate through SW groups
-                        if key == tag['name']: # If SW group name matches Monarch tag
-                            expense_details['groupId']['id'] = value['groupId'] # Add SW groupID to expense_details
-                            expense_details['groupId']['name'] = key
-                            group_member_info = value['members'] # Variable contains the SW group member names and ID's
-                            continue
+            expense_details['groupId']['id'], expense_details['groupId']['name'], group_member_info, groupId_transaction = await self.get_group_metadata(groups, transaction)
                 
             '''
             Cost
@@ -196,17 +227,16 @@ class Main():
             '''
             # If SW group member info was found
             if group_member_info:
-                expense_details['users'] = await self.calculate_sw_user_amount(transaction, group_member_info)
-                    
+                expense_details['users'] = await self.calculate_sw_user_amount(transaction, group_member_info)       
                     
             '''
             Description/SW Title
             '''
             easy_descriptions = self.config['easy_descriptions']
             try:
-                expense_details['description'] = easy_descriptions[transaction['getTransaction']['plaidName']] + " | " + groupId_info['getTransaction']['originalDate']
+                expense_details['description'] = easy_descriptions[transaction['getTransaction']['plaidName']] + " | " + groupId_transaction['getTransaction']['originalDate']
             except:
-                expense_details['description'] = transaction['getTransaction']['plaidName'] + " | " + groupId_info['getTransaction']['originalDate']      
+                expense_details['description'] = transaction['getTransaction']['plaidName'] + " | " + groupId_transaction['getTransaction']['originalDate']      
             
             expense_Id = None
             expense_Id = shelper.create_expense(self.sw,
@@ -219,7 +249,7 @@ class Main():
             This part double checks SW entry and alters monarch tags to show the transaction has been processed
             '''
             if expense_Id:
-                print(f"""Successfully created a transaction with the following details: 
+                print(f"""Successfully created an expense with the following details: 
                     Expense Description: {expense_details['description']}
                     Expense Cost: {expense_details['cost']}
                     Group: {expense_details['groupId']['name']}""")
@@ -237,6 +267,7 @@ class Main():
                     
                     
                     {expense_details}''')
+
 
 if __name__ == '__main__':
     running = Main()

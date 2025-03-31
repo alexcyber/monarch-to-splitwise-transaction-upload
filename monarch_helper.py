@@ -1,16 +1,23 @@
 from monarchmoney import MonarchMoney
 import asyncio
 import json
+import os
+import time
 
 
 
 # Logins into monarch Money via interactive messaging    
-async def login(mm):
+async def login(mm, credentials):
     try:
         mm.load_session()
+        await mm.get_accounts()
     except Exception as e:
-        print(e)
-        await mm.interactive_login()
+        # print(credentials)
+        if os.path.exists(".mm/mm_session.pickle"):
+            os.remove(".mm/mm_session.pickle")
+        time.sleep(1)
+        await mm.login(email=credentials['username'], password=credentials['password'], save_session=True, use_saved_session=False)
+
     return mm
 
 

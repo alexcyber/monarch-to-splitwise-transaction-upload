@@ -1,0 +1,55 @@
+###########################################################
+# This is an example of the config.yaml file.         #
+#                                                     #
+# You can copy this file to config.yaml and edit it   #
+# to your liking.  The config.yaml file is used to    #
+# configure the MonarchMoney to Splitwise integration #
+# and specify the credentials to access               #
+########################################################
+
+
+# These are the credentials to access the splitwise account
+# To get these, go to https://secure.splitwise.com/apps and "build your own application"
+sw_consumer_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+sw_consumer_secret: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+sw_api_key: "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+
+# Monarch now requires a UUID even without 2FA enabled 
+# This is due a recent to change to Monarch's login system.
+# Additional details found here: https://github.com/hammem/monarchmoney/issues/137.
+# To get this, login to Monarch, open the dev console and run localStorage.getItem('monarchDeviceUUID')
+# This will return a UUID that you can use to authenticate with Monarch
+monarch_device_uuid: "00000000-0000-0000-0000-000000000000" 
+
+monarch_user_email: "example@example.com"
+monarch_user_password: "XXXXXXXXXXXXXX"
+
+# This is the name of the user who all expenses is purchased by.  
+# Usually, this is the person who owns the monarch account
+monarch_user_firstname: "AAAAA"
+
+
+# These are the colors of the tags used
+# Edit only the colors of the tags.  The names must be splitwise-group, payee, Not In Splitwise, In Splitwise
+# splitwise-group = Specifies the color used by monarch tags that reference splitwise groups by name exactly
+#                      This color of tag is used to associate a specific transaction to a Splitwise Group
+# payee = Specifies the color used by Monarch tags that identifies individual(s) who owe money.  The tag name 
+#             must be exactly what the Splitwise Firstname of the individual
+# Not In Splitwise = Specifies a transaction that should be in Splitwise but isn't yet.  In other words,
+#                       marks the transactions that are ready to be inputed into Splitwise
+# In Splitwise = Specifies a transaction that is in Splitwise already.  In other words, transactions that have
+#                   already been processed
+key_tag_colors:
+  'splitwise-group' : '#AAAAAA'
+  'payee' : '#BBBBBB'
+  'Not In Splitwise' : '#CCCCCC'
+  'In Splitwise': '#DDDDDD'
+
+
+# Monarch associates long names to transactions.  This allows for overriding.  
+# Add or remove as many as you would like.  Key is equal to the MonarchMoney plaidName.  Value is what to rename it to in splitwise.
+easy_descriptions:
+  "XXXXXXXXXXXX": "Water Bill"
+  "YYYYYYYYYYYY": "Internet"
+  "ZZZZZZZZZZZZ": "Garbage"
+

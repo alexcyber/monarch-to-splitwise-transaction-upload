@@ -80,7 +80,7 @@ def create_expense(sw, description, cost, groupId, users, retries=3):
     
 
         nExpense, errors = sw.createExpense(expense)
-        if errors in locals():
+        if errors:
             print(errors.errors['base'])
         else:
             return nExpense.getId()

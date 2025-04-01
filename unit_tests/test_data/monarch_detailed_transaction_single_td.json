@@ -1,0 +1,121 @@
+[
+    {
+        "getTransaction": {
+            "id": "185591663350027361",
+            "amount": -143.99,
+            "pending": false,
+            "isRecurring": true,
+            "date": "2024-08-08",
+            "originalDate": "2024-08-08",
+            "hideFromReports": false,
+            "needsReview": false,
+            "reviewedAt": null,
+            "reviewedByUser": null,
+            "plaidName": "NORTHEAST POWER COMPANY INC 8882255773 WA",
+            "notes": null,
+            "hasSplitTransactions": false,
+            "isSplitTransaction": false,
+            "isManual": false,
+            "splitTransactions": [],
+            "originalTransaction": null,
+            "attachments": [],
+            "account": {
+                "id": "164782108102923414",
+                "displayName": "Bank Credit Card (...5839)",
+                "logoUrl": "https://api.examplebank.com/cdn-cgi/image/width=128/images/institution/75111197916293981",
+                "mask": "5839",
+                "subtype": {
+                    "display": "Credit Card",
+                    "__typename": "AccountSubtype"
+                },
+                "__typename": "Account"
+            },
+            "category": {
+                "id": "164780499636622561",
+                "__typename": "Category"
+            },
+            "goal": null,
+            "merchant": {
+                "id": "169404276032968666",
+                "name": "Northeast Power Company",
+                "transactionCount": 8,
+                "logoUrl": "https://res.cloudinary.com/example-bank/image/authenticated/s--e6vdkz2z--/c_thumb,h_132,w_132/v1/production/merchant_logos/provider/MCH-b848a1c0-f1a1-b4c6-7b35-69bec5e0c1fc_ajvzon",
+                "recurringTransactionStream": {
+                    "id": "177093911657878653",
+                    "__typename": "RecurringTransactionStream"
+                },
+                "__typename": "Merchant"
+            },
+            "tags": [
+                {
+                    "id": "531245678901234571",
+                    "name": "Not In Splitwise",
+                    "color": "#EF12CD",
+                    "order": 4,
+                    "__typename": "TransactionTag"
+                },
+                {
+                    "id": "531245678901234568",
+                    "name": "Their Amount - Shared Expense",
+                    "color": "#EF67BC",
+                    "order": 1,
+                    "__typename": "TransactionTag"
+                },
+                {
+                    "id": "531245678901234576",
+                    "name": "Jake",
+                    "color": "#EF12AB",
+                    "order": 7,
+                    "__typename": "TransactionTag"
+                },
+                {
+                    "id": "531245678901234572",
+                    "name": "test",
+                    "color": "#AB89CD",
+                    "order": 10,
+                    "__typename": "TransactionTag"
+                },
+                {
+                    "id": "531245678901234578",
+                    "name": "Ryan",
+                    "color": "#EF12AB",
+                    "order": 9,
+                    "__typename": "TransactionTag"
+                },
+                {
+                    "id": "531245678901234577",
+                    "name": "Jasmine",
+                    "color": "#EF12AB",
+                    "order": 8,
+                    "__typename": "TransactionTag"
+                },
+                {
+                    "id": "531245678901234575",
+                    "name": "Liam",
+                    "color": "#EF12AB",
+                    "order": 6,
+                    "__typename": "TransactionTag"
+                },
+                {
+                    "id": "531245678901234579",
+                    "name": "Adam",
+                    "color": "#EF12AB",
+                    "order": 12,
+                    "__typename": "TransactionTag"
+                }
+            ],
+            "needsReviewByUser": null,
+            "__typename": "Transaction"
+        },
+        "myHousehold": {
+            "users": [
+                {
+                    "id": "164780499553446447",
+                    "name": "Adam Smith",
+                    "__typename": "User"
+                }
+            ],
+            "__typename": "Household"
+        }
+    }
+]

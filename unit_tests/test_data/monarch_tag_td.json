@@ -1,0 +1,116 @@
+{
+    "householdTransactionTags": [
+        {
+            "id": "531245678901234567",
+            "name": "My Amount - Shared Expense",
+            "color": "#AB12CD",
+            "order": 0,
+            "transactionCount": 30,
+            "__typename": "TransactionTag"
+        },
+        {
+            "id": "531245678901234568",
+            "name": "Their Amount - Shared Expense",
+            "color": "#EF67BC",
+            "order": 1,
+            "transactionCount": 61,
+            "__typename": "TransactionTag"
+        },
+        {
+            "id": "531245678901234569",
+            "name": "Subscription",
+            "color": "#FF89AB",
+            "order": 2,
+            "transactionCount": 3,
+            "__typename": "TransactionTag"
+        },
+        {
+            "id": "531245678901234570",
+            "name": "In Splitwise",
+            "color": "#9A12CD",
+            "order": 3,
+            "transactionCount": 78,
+            "__typename": "TransactionTag"
+        },
+        {
+            "id": "531245678901234571",
+            "name": "Not In Splitwise",
+            "color": "#EF12CD",
+            "order": 4,
+            "transactionCount": 0,
+            "__typename": "TransactionTag"
+        },
+        {
+            "id": "531245678901234572",
+            "name": "Roomies",
+            "color": "#AB89CD",
+            "order": 5,
+            "transactionCount": 29,
+            "__typename": "TransactionTag"
+        },
+        {
+            "id": "531245678901234573",
+            "name": "Flirt Fund",
+            "color": "#AB89CD",
+            "order": 6,
+            "transactionCount": 8,
+            "__typename": "TransactionTag"
+        },
+        {
+            "id": "531245678901234574",
+            "name": "test",
+            "color": "#AB89CD",
+            "order": 7,
+            "transactionCount": 1,
+            "__typename": "TransactionTag"
+        },
+        {
+            "id": "531245678901234575",
+            "name": "Liam",
+            "color": "#EF12AB",
+            "order": 8,
+            "transactionCount": 12,
+            "__typename": "TransactionTag"
+        },
+        {
+            "id": "531245678901234576",
+            "name": "Jake",
+            "color": "#EF12AB",
+            "order": 9,
+            "transactionCount": 13,
+            "__typename": "TransactionTag"
+        },
+        {
+            "id": "531245678901234577",
+            "name": "Jasmine",
+            "color": "#EF12AB",
+            "order": 10,
+            "transactionCount": 8,
+            "__typename": "TransactionTag"
+        },
+        {
+            "id": "531245678901234578",
+            "name": "Ryan",
+            "color": "#EF12AB",
+            "order": 11,
+            "transactionCount": 11,
+            "__typename": "TransactionTag"
+        },
+        {
+            "id": "531245678901234579",
+            "name": "Adam",
+            "color": "#EF12AB",
+            "order": 12,
+            "transactionCount": 16,
+            "__typename": "TransactionTag"
+        },
+        {
+            "id": "531245678901234580",
+            "name": "Roommate",
+            "color": "#EF12AB",
+            "order": 13,
+            "transactionCount": 0,
+            "__typename": "TransactionTag"
+        }
+    ]
+}

@@ -6,7 +6,6 @@ import asyncio
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import unit_tests.test_data_access as test_data
 from main import Main
 
 class TestMain(unittest.IsolatedAsyncioTestCase):

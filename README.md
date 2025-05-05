@@ -29,11 +29,9 @@ A python script that takes a Monarch Money transaction and adds it to the approp
             * You will see a new panel pop up within the firefox UI.  Within in, select `Console`
             * Type in `localStorage.getItem('monarchDeviceUUID')` and press `Enter`
                 * Please note, copy and pasting may or may not work due to a security setting within Firefox.  Typing it in manually always works
-            * Copy the returned into the `config.yaml` under `monarch_device_uuid`
+            * Copy the returned string into the `config.yaml` under `monarch_device_uuid`
     * Set monarch_user_email
     * Set monarch_user_password
-1. Create and add key tag information:
-    * Once Monarch credentials have been set, you run get_tag_info.py to get the created tags
 
 ### Create necessary tagging information for Monarch Money
 In this section, you will be creating MonarchMoney tags that drives the logic of this script.  You will create 4 tag types, using different colors to differentiate the types.  Here is the breakdown of tag types

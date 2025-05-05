@@ -10,13 +10,21 @@ import time
 async def login(mm, credentials):
     try:
         mm.load_session()
-        await mm.get_accounts()
-    except Exception as e:
-        # print(credentials)
+        # Immediately test if session is valid
+        try:
+            await mm.get_accounts()
+        except Exception:
+            raise ValueError("Invalid session, need to re-login.")
+    except Exception:
         if os.path.exists(".mm/mm_session.pickle"):
             os.remove(".mm/mm_session.pickle")
-        time.sleep(1)
-        await mm.login(email=credentials['username'], password=credentials['password'], save_session=True, use_saved_session=False)
+        del mm._headers["Authorization"]
+        await mm.login(
+            email=credentials['username'],
+            password=credentials['password'],
+            save_session=True,
+            use_saved_session=False
+        )
 
     return mm
 

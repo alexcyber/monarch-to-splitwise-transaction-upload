@@ -40,8 +40,9 @@ def print_categories(categories):
 def format_user(name, userId, paid_share, owed_share):
     return {"name": name, "userId": userId, "paid-share": paid_share, "owed-share": owed_share}
 
-# Creates and publishes an expense.  Returns expenseId
+
 def create_expense(sw, description, cost, groupId, users, retries=3):
+    '''Creates and publishes an expense.  Returns expenseId'''
     while retries > 0:
         retries -= 1
         '''

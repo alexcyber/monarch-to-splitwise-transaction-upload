@@ -34,10 +34,10 @@ class Main():
 
     async def initialize_monarch(self):
         mm = MonarchMoney()
-        mm._headers['Device-UUID'] = self.config['monarch_device_uuid'] # See https://github.com/hammem/monarchmoney/issues/137 for additional information
+        uuid = self.config['monarch_device_uuid']
         credentials = {"username": self.config['monarch_user_email'],
                        "password": self.config['monarch_user_password']}
-        mm = await mhelper.login(mm, credentials)
+        mm = await mhelper.login(mm, credentials, uuid)
         return mm
 
 

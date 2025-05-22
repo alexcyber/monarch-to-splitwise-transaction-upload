@@ -4,28 +4,30 @@ import json
 import os
 import time
 
-
-
-# Logins into monarch Money via interactive messaging    
-async def login(mm, credentials):
+async def login(mm, credentials, uuid):
     try:
         mm.load_session()
         # Immediately test if session is valid
         try:
             await mm.get_accounts()
+            return mm
         except Exception:
             raise ValueError("Invalid session, need to re-login.")
-    except Exception:
+    except FileNotFoundError:
+        os.makedirs(".mm", exist_ok=True)
+    except ValueError:
         if os.path.exists(".mm/mm_session.pickle"):
             os.remove(".mm/mm_session.pickle")
         del mm._headers["Authorization"]
-        await mm.login(
-            email=credentials['username'],
-            password=credentials['password'],
-            save_session=True,
-            use_saved_session=False
-        )
-
+    
+    # Login if session is either invalid or doesn't exist
+    mm._headers['Device-UUID'] = uuid # See https://github.com/hammem/monarchmoney/issues/137 for additional information
+    await mm.login(
+        email=credentials['username'],
+        password=credentials['password'],
+        save_session=True,
+        use_saved_session=False
+    )
     return mm
 
 
@@ -41,14 +43,9 @@ def print_transactions(transactions):
             print(tag['name'])
         print('\n')
 
-# Prints dicts, arrays, or both in an understandable way
-def to_string(obj):
-    print(json.dumps(obj, sort_keys=True, indent=4))
-
     
 async def get_transactions(mm, includeTags=[], excludeTags=[], limit=100, ignorePending=False):
     transactions = await mm.get_transactions(tag_ids=includeTags, limit=limit)
-    
     
     for transaction in transactions['allTransactions']['results'][:]:
         
@@ -72,9 +69,7 @@ async def get_transactions(mm, includeTags=[], excludeTags=[], limit=100, ignore
 async def convert_transactions_to_parent_detailed_transactions(mm, lite_transactions):
     detailed_transactions = []
     transaction_id_set = set()
-            
-            
-    
+
     for transaction in lite_transactions['allTransactions']['results']:
         
         transactionId = transaction['id']
@@ -94,8 +89,3 @@ async def convert_transactions_to_parent_detailed_transactions(mm, lite_transact
         transaction_id_set.add(str(detailed_transaction['getTransaction']['id']))
     
     return detailed_transactions
-
-async def find_and_combine_transactions(mm, transactionId, transaction):
-    splits = await mm.get_transaction_splits(transaction_id=transactionId)
-    child_details = await mm.get_transaction_details(transaction_id=transactionId)
-    parent_details = await mm.get_transaction_details(transaction_id='185517026045891686')

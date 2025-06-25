@@ -20,7 +20,8 @@ async def fetch_tags():
     }
 
     # Login to MonarchMoney
-    mm = await mhelper.login(mm, credentials)
+    uuid = config["monarch_device_uuid"]
+    mm = await mhelper.login(mm, credentials, uuid)
 
     # Fetch tags
     tags = await mm.get_transaction_tags()

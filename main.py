@@ -90,6 +90,13 @@ class Main():
             # creates an array of who owe's what.  When not easily divisible, the extra cent(s) are randomly assigned to an individual
             owed_share_array =  self.calculate_shares(transaction['getTransaction']['amount'] * -1, counter)
             
+            # If the monarch account user isn't tagged, assume that the user owes 0% of transaction
+            # Adds in user for programming logic purposes
+            if self.config['monarch_user_firstname'] not in names:
+                names.append(self.config['monarch_user_firstname'])
+                owed_share_array.append(0)
+
+            # Compiles user information and selects payee vs payer
             for name, owed_share in zip(names, owed_share_array):
                 paid_share = 0.00
                 userId = None

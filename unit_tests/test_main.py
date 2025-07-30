@@ -16,7 +16,6 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         cls.running_config = cls.running.load_config()
         cls.created_transactions = {}
 
-
     @classmethod
     def tearDownClass(cls):
         '''Last method to run after all tests have completed'''
@@ -32,7 +31,6 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
             loop.close()
     
-    
     @classmethod
     async def _async_tear_down(cls):
         '''Deletes all test transactions, even if they were not created by the test.  Runs once after all tests have completed'''
@@ -41,13 +39,11 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         for transaction in transactions['allTransactions']['results']:
             await cls.running.mm.delete_transaction(transaction['id'])
 
-
     async def asyncSetUp(self):
         '''Orchestrates the creation of test transactions'''
         await self.create_non_split_transaction()
         await self.create_split_transaction()
         self.addAsyncCleanup(self.cleanup_created_transactions)
-        
         
     async def cleanup_created_transactions(self):
         '''Deletes registered test transactions.  Runs after every test'''
@@ -57,7 +53,6 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             if not is_deleted:
                 transactions_left.append(transaction_id)
         self.created_transactions = transactions_left
-
 
     async def create_non_split_transaction(self):
         '''Create a non-split test transaction.  Currently hardcoded to a specific amount'''
@@ -72,15 +67,14 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         await self.set_test_tag_scheme(test_transac['createTransaction']['transaction']['id'], 'not-split')
         self.created_transactions['not-split'] = test_transac['createTransaction']['transaction']['id']
 
-
     async def create_split_transaction(self):
-        '''Create a non-split test transaction.  Currently hardcoded to a specific amount'''
+        '''Create a split test transaction with two children.'''
         parent_total = -391.68
         split_amounts = [-78.34, -313.34]
         tolerance = 1e-2
 
         # Ensure the split amounts add up to the parent total
-        # assert sum(split_amounts) == parent_total, "Split amounts do not add up to the parent total"
+        assert abs(sum(split_amounts) - parent_total) < tolerance, "Split amounts do not add up to the parent total"
 
         # Common transaction details
         date = "2019-08-09"
@@ -103,8 +97,6 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.created_transactions['split-parent'] = parent_transaction_id
 
         transactions = await self.running.mm.get_transactions(category_ids=["199976039533811467"])
-        ## TAG Parent required
-        # assert 78.34 + 313.34 == parent_total, "Split amounts do not add up to the parent total"
         assert abs(sum(split_amounts) - parent_total) < tolerance, "Split amounts do not add up to the parent total"
 
         # Prepare split data
@@ -139,7 +131,6 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.created_transactions['split-child-reimbursee'] = child_reimbursee_transaction_id
         self.created_transactions['split-child-repayer'] = child_repayer_transaction_id
         
-        
     async def set_test_tag_scheme(self, transaction_id, scheme):
         if scheme == "not-split":
             tag_dict = {
@@ -171,7 +162,6 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             tag_ids[i] = str(tag)
         tag_update = await self.running.mm.set_transaction_tags(transaction_id, tag_ids)
 
-
     def flatten_values(self, data):
         flattened = []
 
@@ -188,7 +178,6 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
 
         return flattened
         
-        
     @patch.dict(os.environ, {
         'sw_consumer_key': 'test_consumer_key',
         'sw_consumer_secret': 'test_consumer_secret',
@@ -196,6 +185,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         'isLambda': 'True'
     }, clear=True)
     async def test_load_config_new(self):
+        '''Test that config loads correctly from environment variables when isLambda is set.'''
         expected_config = {
             'sw_consumer_key': 'test_consumer_key',
             'sw_consumer_secret': 'test_consumer_secret',
@@ -204,8 +194,8 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         test_config = self.running.load_config()
         self.assertEqual(test_config, expected_config)
 
-
     async def test_calculate_shares_uneven_split_1(self):
+        '''Test that calculate_shares splits 391.68 among 5 people, with correct rounding.'''
         money = 391.68
         n = 5
         expected_result = [78.33, 78.34]
@@ -215,6 +205,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(share in expected_result for share in result))
     
     async def test_calculate_shares_uneven_split_2(self):
+        '''Test that calculate_shares splits 313.34 among 4 people, with correct rounding.'''
         money = 313.34
         n = 4
         expected_result = [78.33, 78.34]
@@ -223,8 +214,8 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(result), n)
         self.assertTrue(all(share in expected_result for share in result))
 
-
     async def test_calculate_shares_even_split(self):
+        '''Test that calculate_shares splits 12.00 evenly among 3 people.'''
         money = 12.00
         n = 3
         result = self.running.calculate_shares(money, n)
@@ -232,8 +223,8 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(result), n)
         self.assertTrue(all(share in [4.00] for share in result))
         
-
     async def test_calculate_sw_user_amount_names_present(self):
+        '''Test that calculate_sw_user_amount returns all expected user names for a split-child-repayer transaction.'''
         transaction_id = self.created_transactions['split-child-repayer']
         transaction = await self.running.mm.get_transaction_details(transaction_id)
         group_member_info = [{'first_name': m['Name'], 'memberId': m['id']} for m in self.running_config['test_repayer_ids']]
@@ -246,6 +237,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertCountEqual(actual_names, expected_names)
         
     async def test_calculate_sw_user_amount_ids_match_names(self):
+        '''Test that calculate_sw_user_amount returns correct user IDs matching the names.'''
         transaction_id = self.created_transactions['split-child-repayer']
         transaction = await self.running.mm.get_transaction_details(transaction_id)
         group_member_info = [{'first_name': m['Name'], 'memberId': m['id']} for m in self.running_config['test_repayer_ids']]
@@ -257,6 +249,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(user['userId'], expected_id)
 
     async def test_calculate_sw_user_amount_paid_share_values(self):
+        '''Test that calculate_sw_user_amount returns owed-share values of 78.33 or 78.34 for split-child-repayer.'''
         transaction_id = self.created_transactions['split-child-repayer']
         transaction = await self.running.mm.get_transaction_details(transaction_id)
         group_member_info = [{'first_name': m['Name'], 'memberId': m['id']} for m in self.running_config['test_repayer_ids']]
@@ -267,6 +260,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             self.assertIn(user['owed-share'], [78.33, 78.34])
 
     async def test_calculate_sw_user_amount_total_paid_share(self):
+        '''Test that the total owed-share for split-parent transaction sums to 391.68.'''
         transaction_id = self.created_transactions['split-parent']
         transaction = await self.running.mm.get_transaction_details(transaction_id)
         group_member_info = [{'first_name': m['Name'], 'memberId': m['id']} for m in self.running_config['test_repayer_ids']]
@@ -275,7 +269,6 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
 
         total = sum(user['owed-share'] for user in result)
         self.assertAlmostEqual(total, 391.68, places=2)
-
 
 if __name__ == '__main__':
     unittest.main(verbosity=10)

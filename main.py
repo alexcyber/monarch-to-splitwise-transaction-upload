@@ -70,7 +70,7 @@ class Main():
     
     
     async def calculate_sw_user_amount(self, transaction, group_member_info):
-        '''Takes a detailed monarch transaction and calculates what each user owes'''    
+        '''Takes a detailed monarch transaction and calculates what each user owes based on tags and splits'''    
         user_entry = [] #list of complete expense entries for a user
         names = [] # List of all names associated with a particular transaction
         counter = 0

@@ -75,9 +75,27 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             category_id = self.running_config['test_mon_category_id'],
             notes = "TEST TRANSACTION - Not Split"
         )
-        await self.set_test_tag_scheme(test_transac['createTransaction']['transaction']['id'], 'not-split',  [item['id'] for item in await self.get_group_members(0)])
+        await self.set_test_tag_scheme(test_transac['createTransaction']['transaction']['id'], 'not-split',  [item['id'] for item in self.running_config['test_sw_group_member_info']])
         self.created_transactions['not-split'] = test_transac['createTransaction']['transaction']['id']
 
+    async def create_custom_transaction(self, date="2019-08-08", account_id=None, amount=1337.13, merchant_name="TEST_TRANSACTION", category_id=None, notes="TEST TRANSACTION - CUSTOM TEST", scheme="not-split", member_count=0, include_root_user=True):
+        '''NOT TESTED Create a non-split test transaction.  Currently hardcoded to a specific amount'''
+        if not account_id:
+            account_id = self.running_config['test_mon_account_id']
+        if not category_id:
+            category_id = self.running_config['test_mon_category_id']
+        test_transac = await self.running.mm.create_transaction(
+            date = date,
+            account_id = account_id,
+            amount = amount,
+            merchant_name = 'TEST_TRANSACTION',
+            category_id = category_id,
+            notes = "TEST TRANSACTION - Not Split"
+        )
+        await self.set_test_tag_scheme(test_transac['createTransaction']['transaction']['id'], scheme,  [item['id'] for item in await self.get_group_members(member_count, include_root_user=include_root_user)])
+        self.created_transactions['not-split'] = test_transac['createTransaction']['transaction']['id']
+        return test_transac
+    
     async def create_split_transaction(self):
         '''Create a split test transaction with two children.'''
         parent_total = -391.68
@@ -97,7 +115,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         # Create the parent transaction
         parent_transaction = await self.running.mm.create_transaction(
             date = date,
-            account_id = self.running_config['test_mon_account_id'],
+            account_id = account_id,
             amount = parent_total,
             merchant_name = merchant_name,
             category_id=category_id,
@@ -135,8 +153,8 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         child_repayer_transaction_id = parent_transaction['updateTransactionSplit']['transaction']['splitTransactions'][1]['id']
         
         # Set the tag scheme for the child transactions
-        await self.set_test_tag_scheme(child_reimbursee_transaction_id, 'split-child-reimbursee', [item['id'] for item in await self.get_group_members(0)])
-        await self.set_test_tag_scheme(child_repayer_transaction_id, 'split-child-repayer', [item['id'] for item in await self.get_group_members(0)])
+        await self.set_test_tag_scheme(child_reimbursee_transaction_id, 'split-child-reimbursee', [item['id'] for item in self.running_config['test_sw_group_member_info']])
+        await self.set_test_tag_scheme(child_repayer_transaction_id, 'split-child-repayer', [item['id'] for item in self.running_config['test_sw_group_member_info'] if item['is_root'] is False])
         
         # Store the child transaction IDs
         self.created_transactions['split-child-reimbursee'] = child_reimbursee_transaction_id
@@ -144,18 +162,19 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
 
     async def get_group_members(self, n, include_root_user = False):
         '''
+        LEGACY.
         Helper function that delivers the first Nth users from a splitwise group.  
         include_root_user adds and additional member to the list, the root user is appended to the list returned
         '''
         group_members = []
         if n == 0:
-            group_members = [item for item in self.running_config['test_sw_group_members_not_root']]
+            group_members = [item for item in self.running_config['test_sw_group_member_info']]
         else:
             counter = 0
             try:
                 while counter != n:
                     counter += counter
-                    group_members += self.running_config['test_sw_group_members_not_root'][counter]
+                    group_members += self.running_config['test_sw_group_member_info'][counter]
                 return group_members
             except IndexError as e:
                 raise IndexError("The amount of group members requested for the test exceeds the SplitWise group size.") from e
@@ -276,53 +295,82 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(result), n)
         self.assertTrue(all(share in [4.00] for share in result))
         
-    async def test_calculate_sw_user_amount_names_present(self):
+    async def test_build_user_share_entries_names_present(self):
         '''Test that calculate_sw_user_amount returns all expected user names for a split-child-repayer transaction.'''
         transaction_id = self.created_transactions['split-child-repayer']
         transaction = await self.running.mm.get_transaction_details(transaction_id)
-        group_member_info = [{'first_name': m['Name'], 'memberId': m['id']} for m in self.running_config['test_sw_group_members_not_root']]
+        group_member_info = [{'first_name': m['Name'], 'memberId': m['id']} for m in self.running_config['test_sw_group_member_info']]
 
-        result = await self.running.calculate_sw_user_amount(transaction, group_member_info)
+        result = await self.running.build_user_share_entries(transaction, group_member_info)
 
         #Expected should include the all members including root
-        expected_names = self.running_config['test_sw_group_members_not_root']
-        expected_names += self.running_config['test_root_user']
+        expected_names = [item for item in self.running_config['test_sw_group_member_info'] if item['is_root'] is False]
+        # expected_names += self.running_config['test_root_user']
         expected_names = [m['Name'] for m in expected_names]
         
         actual_names = [user['name'] for user in result]
         
         self.assertCountEqual(actual_names, expected_names)
         
-    async def test_calculate_sw_user_amount_ids_match_names(self):
+    # async def test_calculate_sw_user_amount_adds_owner_when_missing(self):
+    #     """
+    #     Test that if the owner is not tagged in a real transaction, they are added with owed-share 0.
+    #     """
+    #     # Use the 'not-split' transaction, but simulate tags missing the owner
+    #     transaction_id = self.created_transactions['not-split']
+    #     transaction = await self.running.mm.get_transaction_details(transaction_id)
+    #     # Remove the owner from the tags for this test
+    #     owner_name = self.running_config['test_root_user']['Name'] ##### double check this.  Could be self.running_config['test_root_user'][0]['Name']
+    #     tags = [tag for tag in transaction['getTransaction']['tags'] if tag['name'] != owner_name]
+    #     transaction['getTransaction']['tags'] = tags
+
+    #     # Build group_member_info from config
+    #     group_member_info = [
+    #         {'first_name': m['Name'], 'memberId': m['id']}
+    #         for m in self.running_config['test_sw_group_member_info']
+    #     ]
+    #     # Add the owner to group_member_info
+    #     group_member_info.append({
+    #         'first_name': owner_name,
+    #         'memberId': self.running_config['test_root_user'][0]['id']
+    #     })
+
+    #     result = await self.running.calculate_sw_user_amount(transaction, group_member_info)
+    #     names = [u['name'] for u in result]
+    #     self.assertIn(owner_name, names)
+    #     for u in result:
+    #         if u['name'] == owner_name:
+    #             self.assertEqual(u['owed-share'], 0)
+        
+    async def test_build_user_share_entries_ids_match_names(self):
         '''Test that calculate_sw_user_amount returns correct user IDs matching the names.'''
         transaction_id = self.created_transactions['split-child-repayer']
         transaction = await self.running.mm.get_transaction_details(transaction_id)
-        group_member_info = [{'first_name': m['Name'], 'memberId': m['id']} for m in self.running_config['test_sw_group_members_not_root']]
+        group_member_info = [{'first_name': m['Name'], 'memberId': m['id']} for m in self.running_config['test_sw_group_member_info']]
 
-        result = await self.running.calculate_sw_user_amount(transaction, group_member_info)
+        result = await self.running.build_user_share_entries(transaction, group_member_info)
 
         for user in result:
-            expected_id = next((m['id'] for m in self.running_config['test_sw_group_members_not_root'] if m['Name'] == user['name']), None)
+            expected_id = next((m['id'] for m in self.running_config['test_sw_group_member_info'] if m['Name'] == user['name']), None)
             self.assertEqual(user['userId'], expected_id)
 
-    async def test_calculate_sw_user_amount_paid_share_values(self):
+    async def test_build_user_share_entries_paid_share_values(self):
         '''Test that calculate_sw_user_amount returns owed-share values of 78.33 or 78.34 for split-child-repayer.'''
         transaction_id = self.created_transactions['split-child-repayer']
         transaction = await self.running.mm.get_transaction_details(transaction_id)
-        group_member_info = [{'first_name': m['Name'], 'memberId': m['id']} for m in self.running_config['test_sw_group_members_not_root']]
+        group_member_info = [{'first_name': m['Name'], 'memberId': m['id']} for m in self.running_config['test_sw_group_member_info']]
 
-        result = await self.running.calculate_sw_user_amount(transaction, group_member_info)
-        result.pop(4) # Pop root of test as they owe nothing
+        result = await self.running.build_user_share_entries(transaction, group_member_info)
         for user in result:
             self.assertIn(user['owed-share'], [78.33, 78.34])
 
-    async def test_calculate_sw_user_amount_total_paid_share(self):
+    async def test_build_user_share_entries_total_paid_share(self):
         '''Test that the total owed-share for split-parent transaction sums to 391.68.'''
         transaction_id = self.created_transactions['split-parent']
         transaction = await self.running.mm.get_transaction_details(transaction_id)
-        group_member_info = [{'first_name': m['Name'], 'memberId': m['id']} for m in self.running_config['test_sw_group_members_not_root']]
+        group_member_info = [{'first_name': m['Name'], 'memberId': m['id']} for m in self.running_config['test_sw_group_member_info']]
 
-        result = await self.running.calculate_sw_user_amount(transaction, group_member_info)
+        result = await self.running.build_user_share_entries(transaction, group_member_info)
 
         total = sum(user['owed-share'] for user in result)
         self.assertAlmostEqual(total, 391.68, places=2)

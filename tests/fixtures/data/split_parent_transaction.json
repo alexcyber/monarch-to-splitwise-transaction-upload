@@ -1,0 +1,27 @@
+{
+    "getTransaction": {
+        "id": "100000000000000010",
+        "amount": -100.00,
+        "pending": false,
+        "isRecurring": false,
+        "date": "2024-01-20",
+        "originalDate": "2024-01-20",
+        "hideFromReports": false,
+        "needsReview": false,
+        "reviewedAt": null,
+        "reviewedByUser": null,
+        "plaidName": "SPLIT TEST MERCHANT",
+        "notes": null,
+        "hasSplitTransactions": true,
+        "isSplitTransaction": false,
+        "isManual": false,
+        "splitTransactions": [
+            {"id": "100000000000000011", "__typename": "Transaction"},
+            {"id": "100000000000000012", "__typename": "Transaction"}
+        ],
+        "originalTransaction": null,
+        "attachments": [],
+        "tags": [],
+        "__typename": "Transaction"
+    }
+}

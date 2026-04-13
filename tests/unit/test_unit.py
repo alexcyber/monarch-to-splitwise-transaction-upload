@@ -199,6 +199,22 @@ class TestComputeShares(unittest.IsolatedAsyncioTestCase):
             if entry["name"] != "Alex":
                 self.assertEqual(entry["paid-share"], 0.00)
 
+    async def test_unknown_payee_name_sets_user_id_none(self):
+        """A payee tag whose name does not appear in group_member_info produces userId=None."""
+        transaction = {
+            "getTransaction": {
+                "amount": -30.00,
+                "isSplitTransaction": False,
+                "originalTransaction": None,
+                "tags": [
+                    {"name": "Ghost", "color": "#EF12AB"},
+                ],
+            }
+        }
+        result = await self.running.compute_shares(transaction, MOCK_GROUP_MEMBER_INFO)
+        self.assertEqual(len(result), 1)
+        self.assertIsNone(result[0]["userId"])
+
     async def test_user_ids_match_group_member_info(self):
         """Returned userId values must correspond to the correct member."""
         result = await self.running.compute_shares(self.non_split, MOCK_GROUP_MEMBER_INFO)
@@ -214,22 +230,20 @@ class TestComputeShares(unittest.IsolatedAsyncioTestCase):
         # isSplitTransaction=True → paid_share from originalTransaction.amount * -1
         self.assertAlmostEqual(alex_entries[0]["paid-share"], 100.00, places=2)
 
-    async def test_name_override_with_owed_override_zero_returns_empty(self):
-        """
-        KNOWN BUG: compute_shares ignores owed_share_array_override and sets
-        owed_share_array = [] instead. zip(names, []) yields nothing, so the
-        method returns []. The intended behavior is to return a single entry with
-        owed-share=0. This test documents the current (buggy) behavior so a fix
-        will be visible as a test change.
-        """
+    async def test_name_override_with_owed_override_zero_returns_root_entry(self):
+        """When called with a name override and owed_share_array_override=[0],
+        compute_shares should return a single entry for that user with owed-share=0
+        and paid-share equal to the full transaction amount (since they are the root user)."""
         result = await self.running.compute_shares(
             self.non_split,
             MOCK_GROUP_MEMBER_INFO,
             name_list_override=["Alex"],
             owed_share_array_override=[0],
         )
-        # Bug: returns [] instead of [{"name": "Alex", "owed-share": 0, ...}]
-        self.assertEqual(result, [])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["name"], "Alex")
+        self.assertEqual(result[0]["owed-share"], 0)
+        self.assertAlmostEqual(result[0]["paid-share"], 120.00, places=2)
 
 
 # ---------------------------------------------------------------------------
@@ -400,22 +414,97 @@ class TestBuildUserShareEntries(unittest.IsolatedAsyncioTestCase):
         # child1 = $60, child2 = $40 → total $100
         self.assertAlmostEqual(total, 100.00, places=2)
 
-    async def test_root_user_absent_from_tags_is_not_added_due_to_bug(self):
-        """
-        KNOWN BUG: When root user is absent from payee tags, build_user_share_entries
-        calls compute_shares(..., owed_share_array_override=[0]) to append a zero-share
-        entry. Due to the bug in compute_shares, owed_share_array is set to [] instead
-        of [0], so the root user is never actually appended.
+    async def test_split_parent_total_paid_share_equals_cost(self):
+        """sum(paid-share) == parent cost when root user is tagged in a split child.
+        Root's paid-share is set from originalTransaction.amount, not the child amount."""
+        child_map = {
+            self.child1["getTransaction"]["id"]: self.child1,
+            self.child2["getTransaction"]["id"]: self.child2,
+        }
+        self.running.mm.get_transaction_details = AsyncMock(
+            side_effect=lambda tid: child_map[tid]
+        )
+        result = await self.running.build_user_share_entries(
+            self.split_parent, MOCK_GROUP_MEMBER_INFO
+        )
+        cost = self.split_parent["getTransaction"]["amount"] * -1
+        total_paid = sum(e["paid-share"] for e in result)
+        self.assertAlmostEqual(total_paid, cost, places=2)
 
-        This test documents the current behavior. Once the bug is fixed in compute_shares,
-        this test should be updated to assert that "Alex" IS present in the result.
-        """
+    async def test_non_split_total_paid_share_equals_cost(self):
+        """sum(paid-share) must equal the transaction cost — the exact invariant
+        Splitwise enforces. Regression guard for the root-user paid-share bug."""
+        result = await self.running.build_user_share_entries(
+            self.non_split, MOCK_GROUP_MEMBER_INFO
+        )
+        cost = self.non_split["getTransaction"]["amount"] * -1
+        total_paid = sum(e["paid-share"] for e in result)
+        self.assertAlmostEqual(total_paid, cost, places=2)
+
+    async def test_no_root_total_paid_share_equals_cost(self):
+        """When root user is absent from tags and gets auto-injected, the injected
+        paid-share must bring sum(paid-share) up to the full transaction cost."""
+        result = await self.running.build_user_share_entries(
+            self.no_root, MOCK_GROUP_MEMBER_INFO
+        )
+        cost = self.no_root["getTransaction"]["amount"] * -1
+        total_paid = sum(e["paid-share"] for e in result)
+        self.assertAlmostEqual(total_paid, cost, places=2)
+
+    async def test_split_no_root_adds_root_user_with_paid_share(self):
+        """When neither split child tags the root user, build_user_share_entries
+        must still inject the root user with owed-share=0 and paid-share=parent amount."""
+        split_no_root_parent = load("split_no_root_parent")
+        child1 = load("split_no_root_child_1")
+        child2 = load("split_no_root_child_2")
+        child_map = {
+            child1["getTransaction"]["id"]: child1,
+            child2["getTransaction"]["id"]: child2,
+        }
+        self.running.mm.get_transaction_details = AsyncMock(
+            side_effect=lambda tid: child_map[tid]
+        )
+        result = await self.running.build_user_share_entries(
+            split_no_root_parent, MOCK_GROUP_MEMBER_INFO
+        )
+        names = [e["name"] for e in result]
+        self.assertIn("Alex", names)
+        alex = next(e for e in result if e["name"] == "Alex")
+        self.assertEqual(alex["owed-share"], 0)
+        self.assertAlmostEqual(alex["paid-share"], 80.00, places=2)
+
+    async def test_split_no_root_total_paid_share_equals_cost(self):
+        """sum(paid-share) == parent cost even when root user is auto-injected
+        into a split transaction."""
+        split_no_root_parent = load("split_no_root_parent")
+        child1 = load("split_no_root_child_1")
+        child2 = load("split_no_root_child_2")
+        child_map = {
+            child1["getTransaction"]["id"]: child1,
+            child2["getTransaction"]["id"]: child2,
+        }
+        self.running.mm.get_transaction_details = AsyncMock(
+            side_effect=lambda tid: child_map[tid]
+        )
+        result = await self.running.build_user_share_entries(
+            split_no_root_parent, MOCK_GROUP_MEMBER_INFO
+        )
+        cost = split_no_root_parent["getTransaction"]["amount"] * -1
+        total_paid = sum(e["paid-share"] for e in result)
+        self.assertAlmostEqual(total_paid, cost, places=2)
+
+    async def test_root_user_absent_from_tags_is_added_with_zero_owed(self):
+        """When the root user is not tagged as a payee, build_user_share_entries must
+        add them automatically with owed-share=0 and paid-share=full amount so that
+        Splitwise's paid-share validation passes."""
         result = await self.running.build_user_share_entries(
             self.no_root, MOCK_GROUP_MEMBER_INFO
         )
         names = [e["name"] for e in result]
-        # Bug: "Alex" should be in names but is NOT added due to the override bug
-        self.assertNotIn("Alex", names)
+        self.assertIn("Alex", names)
+        alex = next(e for e in result if e["name"] == "Alex")
+        self.assertEqual(alex["owed-share"], 0)
+        self.assertAlmostEqual(alex["paid-share"], 90.00, places=2)
 
 
 if __name__ == "__main__":

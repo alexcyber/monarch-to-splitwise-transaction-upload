@@ -82,7 +82,7 @@ class Main():
         # Check if root user is mentioned as oweing a portion.  
         # If root owes no part of the transaction, add root user for computational reasons. SW requires a payee
         root_user_name = self.config['monarch_user_firstname']
-        if not any(p.get('name') == 'Alex' for p in user_shares): # checks if root user is in user_shares list
+        if not any(p.get('name') == root_user_name for p in user_shares): # checks if root user is in user_shares list
             user_shares.append(await self.compute_shares(transaction, group_member_info, name_list_override=[root_user_name], owed_share_array_override=[0])) # appends if not
             user_shares = self.flatten_list(user_shares)
 
@@ -116,7 +116,7 @@ class Main():
             # creates an array of who owe's what.  When not easily divisible, the extra cent(s) are randomly assigned to an individual
             owed_share_array =  self.calculate_shares(transaction['getTransaction']['amount'] * -1, counter)
         else:
-            owed_share_array = []
+            owed_share_array = owed_share_array_override
     
         # Compiles user information and selects payee vs payer
         for name, owed_share in zip(names, owed_share_array):

@@ -1,0 +1,50 @@
+{
+    "getTransaction": {
+        "id": "100000000000000032",
+        "amount": -30.00,
+        "pending": false,
+        "isRecurring": false,
+        "date": "2024-03-01",
+        "originalDate": "2024-03-01",
+        "hideFromReports": false,
+        "needsReview": false,
+        "reviewedAt": null,
+        "reviewedByUser": null,
+        "plaidName": "SPLIT NO ROOT MERCHANT",
+        "notes": null,
+        "hasSplitTransactions": false,
+        "isSplitTransaction": true,
+        "isManual": false,
+        "splitTransactions": [],
+        "originalTransaction": {
+            "id": "100000000000000030",
+            "amount": -80.00,
+            "__typename": "Transaction"
+        },
+        "attachments": [],
+        "tags": [
+            {
+                "id": "200000000000000001",
+                "name": "Roomies",
+                "color": "#AB89CD",
+                "order": 0,
+                "__typename": "TransactionTag"
+            },
+            {
+                "id": "200000000000000004",
+                "name": "Jasmine",
+                "color": "#EF12AB",
+                "order": 3,
+                "__typename": "TransactionTag"
+            },
+            {
+                "id": "200000000000000005",
+                "name": "Not In Splitwise",
+                "color": "#EF12CD",
+                "order": 4,
+                "__typename": "TransactionTag"
+            }
+        ],
+        "__typename": "Transaction"
+    }
+}

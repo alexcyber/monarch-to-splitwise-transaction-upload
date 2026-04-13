@@ -1,0 +1,57 @@
+{
+    "getTransaction": {
+        "id": "100000000000000011",
+        "amount": -60.00,
+        "pending": false,
+        "isRecurring": false,
+        "date": "2024-01-20",
+        "originalDate": "2024-01-20",
+        "hideFromReports": false,
+        "needsReview": false,
+        "reviewedAt": null,
+        "reviewedByUser": null,
+        "plaidName": "SPLIT TEST MERCHANT",
+        "notes": null,
+        "hasSplitTransactions": false,
+        "isSplitTransaction": true,
+        "isManual": false,
+        "splitTransactions": [],
+        "originalTransaction": {
+            "id": "100000000000000010",
+            "amount": -100.00,
+            "__typename": "Transaction"
+        },
+        "attachments": [],
+        "tags": [
+            {
+                "id": "200000000000000001",
+                "name": "Roomies",
+                "color": "#AB89CD",
+                "order": 0,
+                "__typename": "TransactionTag"
+            },
+            {
+                "id": "200000000000000002",
+                "name": "Alex",
+                "color": "#EF12AB",
+                "order": 1,
+                "__typename": "TransactionTag"
+            },
+            {
+                "id": "200000000000000003",
+                "name": "Jake",
+                "color": "#EF12AB",
+                "order": 2,
+                "__typename": "TransactionTag"
+            },
+            {
+                "id": "200000000000000005",
+                "name": "Not In Splitwise",
+                "color": "#EF12CD",
+                "order": 4,
+                "__typename": "TransactionTag"
+            }
+        ],
+        "__typename": "Transaction"
+    }
+}

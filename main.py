@@ -68,54 +68,77 @@ class Main():
         detailed_transactions = await mhelper.convert_transactions_to_parent_detailed_transactions(self.mm, transactions)
         return detailed_transactions, tags
     
-    
-    async def calculate_sw_user_amount(self, transaction, group_member_info):
-        '''Takes a detailed monarch transaction and calculates what each user owes'''    
-        user_entry = [] #list of complete expense entries for a user
-        names = [] # List of all names associated with a particular transaction
-        counter = 0
+    async def build_user_share_entries(self, transaction, group_member_info):
+        user_shares = [] # list of complete expense entries a set of user_shares
         # Check if this object was split.  If so, then grab total price from original transaction
         if transaction['getTransaction']['hasSplitTransactions']:
-            for transaction in transaction['getTransaction']['splitTransactions']:
-                transaction =  await self.mm.get_transaction_details(transaction['id'])
-                user_entry.append(await self.calculate_sw_user_amount(transaction, group_member_info))
-                #user_entry.append(await self.calculate_sw_user_amount(transaction, self.config['key_tag_colors'], group_member_info))
-                ### Need additional code to combine users into just one entity
+            for transaction_child in transaction['getTransaction']['splitTransactions']:
+                transaction_child =  await self.mm.get_transaction_details(transaction_child['id'])
+                user_shares.append(await self.compute_shares(transaction_child, group_member_info)) # compute on a per split basis
         else:
+            user_shares.append(await self.compute_shares(transaction, group_member_info)) # compute as a whole
+        user_shares = self.flatten_list(user_shares)
+
+        # Check if root user is mentioned as oweing a portion.  
+        # If root owes no part of the transaction, add root user for computational reasons. SW requires a payee
+        root_user_name = self.config['monarch_user_firstname']
+        if not any(p.get('name') == 'Alex' for p in user_shares): # checks if root user is in user_shares list
+            user_shares.append(await self.compute_shares(transaction, group_member_info, name_list_override=[root_user_name], owed_share_array_override=[0])) # appends if not
+            user_shares = self.flatten_list(user_shares)
+
+        return user_shares
+
+    def flatten_list(self,nested_list):
+        flat = []
+        for item in nested_list:
+            if isinstance(item, list):
+                flat.extend(self.flatten_list(item))  # recursive flattening
+            else:
+                flat.append(item)
+        return flat
+
+    async def compute_shares(self, transaction, group_member_info, name_list_override = None, owed_share_array_override = None):
+        '''Takes a detailed monarch transaction and calculates what each user owes based on tags and splits'''    
+        user_entry = [] # list of complete expense entries for a user
+        
+        # Overrides for when adding the root user when not mentioned in tagging.  Otherwise, compute shares as normal
+        if not name_list_override:
+            counter = 0
+            names = [] # List of all names associated with a particular transaction
             for tag in transaction['getTransaction']['tags']:
                 if tag['color'] == self.config['key_tag_colors']['payee']:
                     names.append(tag['name'])
                     counter += 1
-            
+        else:
+            counter = len(name_list_override)
+            names = name_list_override
+        if not owed_share_array_override:
             # creates an array of who owe's what.  When not easily divisible, the extra cent(s) are randomly assigned to an individual
             owed_share_array =  self.calculate_shares(transaction['getTransaction']['amount'] * -1, counter)
-            
-            for name, owed_share in zip(names, owed_share_array):
-                paid_share = 0.00
-                userId = None
-                for member in group_member_info:
-                    if member['first_name'] == name:
-                        userId = member['memberId']
-                        break
-                if name == self.config['monarch_user_firstname']:
-                    if transaction['getTransaction']['isSplitTransaction']:
-                        paid_share = transaction['getTransaction']['originalTransaction']['amount'] * -1
-                    else:
-                        paid_share = transaction['getTransaction']['amount'] * -1 
-                user_entry.append({"name": name,
-                                "userId": userId,
-                                "paid-share": paid_share,
-                                "owed-share": owed_share
-                                })
-        
-        flat_user_entry = []
-        if type(user_entry[0]) is list:
-            for xs in user_entry:
-                for x in xs:
-                    flat_user_entry.append(x)
         else:
-            flat_user_entry = user_entry
-        return flat_user_entry
+            owed_share_array = []
+    
+        # Compiles user information and selects payee vs payer
+        for name, owed_share in zip(names, owed_share_array):
+            paid_share = 0.00
+            userId = None
+            for member in group_member_info:
+                if member['first_name'] == name:
+                    userId = member['memberId']
+                    break
+            if name == self.config['monarch_user_firstname']:
+                if transaction['getTransaction']['isSplitTransaction']:
+                    paid_share = transaction['getTransaction']['originalTransaction']['amount'] * -1
+                else:
+                    paid_share = transaction['getTransaction']['amount'] * -1 
+            user_entry.append({"name": name,
+                            "userId": userId,
+                            "paid-share": paid_share,
+                            "owed-share": owed_share
+                            })
+        
+        return user_entry
+
     
     
     # Calculates the amount each person owes    
@@ -144,15 +167,24 @@ class Main():
         # If the transaction has been split, take the groupId of the first child object.
         # This is because the parent object cannot be edited once split.  Child's can be
         groupId_transaction = await self.get_groupId_transaction(transaction)
-        
-        for tag in groupId_transaction['getTransaction']['tags']:
-            if tag['color'] == self.config['key_tag_colors']['splitwise-group']: # If the transaction tag matches a the splitwise group color
-                for key, value in groups.items(): # Iterate through SW groups
-                    if key == tag['name']: # If SW group name matches Monarch tag
-                        group_id = value['groupId'] # Add SW groupID to expense_details
-                        group_name = key
-                        group_member_info = value['members'] # Variable contains the SW group member names and ID's
-                        return group_id, group_name, group_member_info, groupId_transaction
+        tags = groupId_transaction['getTransaction'].get('tags', [])
+        if not tags:
+            raise ValueError(
+                f"No tags found for transaction ID {groupId_transaction['getTransaction'].get('id')}. "
+                f"Transaction data: {groupId_transaction['getTransaction']}"
+            )
+
+        sw_group_color = self.config['key_tag_colors']['splitwise-group']
+        for tag in tags:
+            if tag.get('color') == sw_group_color: # If the transaction tag matches a the splitwise group color
+                group = groups.get(tag.get('name'))
+                if group: # If SW group name matches Monarch tag
+                    group_id = group['groupId'] # Add SW groupID to expense_details
+                    group_name = tag['name']
+                    group_member_info = group['members'] # Variable contains the SW group member names and ID's
+                    return group_id, group_name, group_member_info, groupId_transaction
+        # If no matching group found, return None values
+        return None, None, None, groupId_transaction
               
                     
     def get_sw_groups(self):
@@ -216,7 +248,11 @@ class Main():
             - Once the group has been identified, pull SW memberId's to be used when assigning individual expenses 
             '''
             expense_details['groupId']['id'], expense_details['groupId']['name'], group_member_info, groupId_transaction = await self.get_group_metadata(groups, transaction)
-                
+            if not groupId_transaction:
+                raise KeyError(
+                    f"Failed to pull SW group metadata"
+                )
+
             '''
             Cost
             '''
@@ -227,7 +263,7 @@ class Main():
             '''
             # If SW group member info was found
             if group_member_info:
-                expense_details['users'] = await self.calculate_sw_user_amount(transaction, group_member_info)       
+                expense_details['users'] = await self.build_user_share_entries(transaction, group_member_info)       
                     
             '''
             Description/SW Title

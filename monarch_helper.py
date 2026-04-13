@@ -37,8 +37,8 @@ async def get_tags(mm):
 
 def print_transactions(transactions):
     for transaction in transactions['allTransactions']['results']:
-        print(f'Transaction Name: {transaction['plaidName']}')
-        print(f'Date: {transaction['date']}')
+        print(f"Transaction Name: {transaction['plaidName']}")
+        print(f"Date: {transaction['date']}")
         for tag in transaction['tags']:
             print(tag['name'])
         print('\n')

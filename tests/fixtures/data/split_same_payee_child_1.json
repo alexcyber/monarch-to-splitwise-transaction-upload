@@ -1,0 +1,43 @@
+{
+    "getTransaction": {
+        "id": "100000000000000051",
+        "amount": -0.44,
+        "pending": false,
+        "isRecurring": false,
+        "date": "2026-01-23",
+        "originalDate": "2026-01-23",
+        "hideFromReports": false,
+        "needsReview": false,
+        "reviewedAt": null,
+        "reviewedByUser": null,
+        "plaidName": "DUPLICATE PAYEE MERCHANT",
+        "notes": null,
+        "hasSplitTransactions": false,
+        "isSplitTransaction": true,
+        "isManual": false,
+        "splitTransactions": [],
+        "originalTransaction": {
+            "id": "100000000000000050",
+            "amount": -0.68,
+            "__typename": "Transaction"
+        },
+        "attachments": [],
+        "tags": [
+            {
+                "id": "200000000000000001",
+                "name": "Roomies",
+                "color": "#AB89CD",
+                "order": 0,
+                "__typename": "TransactionTag"
+            },
+            {
+                "id": "200000000000000002",
+                "name": "Alex",
+                "color": "#EF12AB",
+                "order": 1,
+                "__typename": "TransactionTag"
+            }
+        ],
+        "__typename": "Transaction"
+    }
+}

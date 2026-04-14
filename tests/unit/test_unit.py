@@ -185,19 +185,12 @@ class TestComputeShares(unittest.IsolatedAsyncioTestCase):
         result = await self.running.compute_shares(self.non_split, MOCK_GROUP_MEMBER_INFO)
         self.assertEqual(len(result), 3)  # Alex, Jake, Jasmine
 
-    async def test_root_user_paid_share_is_full_amount_non_split(self):
-        """Root user (Alex) on a non-split transaction should have paid_share = full amount."""
-        result = await self.running.compute_shares(self.non_split, MOCK_GROUP_MEMBER_INFO)
-        alex_entries = [e for e in result if e["name"] == "Alex"]
-        self.assertEqual(len(alex_entries), 1)
-        self.assertAlmostEqual(alex_entries[0]["paid-share"], 120.00, places=2)
-
-    async def test_non_root_user_paid_share_is_zero(self):
-        """Non-root payees should have paid_share = 0."""
+    async def test_paid_share_always_zero(self):
+        """compute_shares no longer assigns paid-share — build_user_share_entries does,
+        centrally, so root's paid-share is not double-counted across split children."""
         result = await self.running.compute_shares(self.non_split, MOCK_GROUP_MEMBER_INFO)
         for entry in result:
-            if entry["name"] != "Alex":
-                self.assertEqual(entry["paid-share"], 0.00)
+            self.assertEqual(entry["paid-share"], 0.00)
 
     async def test_unknown_payee_name_sets_user_id_none(self):
         """A payee tag whose name does not appear in group_member_info produces userId=None."""
@@ -222,28 +215,48 @@ class TestComputeShares(unittest.IsolatedAsyncioTestCase):
         for entry in result:
             self.assertEqual(entry["userId"], id_map[entry["name"]])
 
-    async def test_split_child_paid_share_uses_original_amount(self):
-        """For a split child where root is payee, paid_share = originalTransaction amount."""
+    async def test_split_child_owed_share_equals_child_amount(self):
+        """For a split child with a single payee, owed-share equals the child amount."""
         result = await self.running.compute_shares(self.child1, MOCK_GROUP_MEMBER_INFO)
-        alex_entries = [e for e in result if e["name"] == "Alex"]
-        self.assertEqual(len(alex_entries), 1)
-        # isSplitTransaction=True → paid_share from originalTransaction.amount * -1
-        self.assertAlmostEqual(alex_entries[0]["paid-share"], 100.00, places=2)
+        total = sum(e["owed-share"] for e in result)
+        self.assertAlmostEqual(total, 60.00, places=2)
 
-    async def test_name_override_with_owed_override_zero_returns_root_entry(self):
-        """When called with a name override and owed_share_array_override=[0],
-        compute_shares should return a single entry for that user with owed-share=0
-        and paid-share equal to the full transaction amount (since they are the root user)."""
-        result = await self.running.compute_shares(
-            self.non_split,
-            MOCK_GROUP_MEMBER_INFO,
-            name_list_override=["Alex"],
-            owed_share_array_override=[0],
-        )
+    async def test_fallback_to_group_members_when_no_payee_tags(self):
+        """When a transaction has a group tag but no payee tags, compute_shares
+        splits evenly across every group member (instead of crashing with div-by-zero)."""
+        transaction = {
+            "getTransaction": {
+                "amount": -40.00,
+                "isSplitTransaction": False,
+                "originalTransaction": None,
+                "tags": [
+                    {"name": "Roomies", "color": "#AB89CD"},
+                ],
+            }
+        }
+        result = await self.running.compute_shares(transaction, MOCK_GROUP_MEMBER_INFO)
+        self.assertEqual(len(result), len(MOCK_GROUP_MEMBER_INFO))
+        total = sum(e["owed-share"] for e in result)
+        self.assertAlmostEqual(total, 40.00, places=2)
+        names = {e["name"] for e in result}
+        self.assertEqual(names, {m["first_name"] for m in MOCK_GROUP_MEMBER_INFO})
+
+    async def test_refund_amount_uses_abs_value(self):
+        """A positive-amount (refund) transaction produces positive owed-shares,
+        which is required before the refund transform can run."""
+        transaction = {
+            "getTransaction": {
+                "amount": 20.00,  # positive = refund in Monarch
+                "isSplitTransaction": False,
+                "originalTransaction": None,
+                "tags": [
+                    {"name": "Alex", "color": "#EF12AB"},
+                ],
+            }
+        }
+        result = await self.running.compute_shares(transaction, MOCK_GROUP_MEMBER_INFO)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["name"], "Alex")
-        self.assertEqual(result[0]["owed-share"], 0)
-        self.assertAlmostEqual(result[0]["paid-share"], 120.00, places=2)
+        self.assertAlmostEqual(result[0]["owed-share"], 20.00, places=2)
 
 
 # ---------------------------------------------------------------------------
@@ -505,6 +518,205 @@ class TestBuildUserShareEntries(unittest.IsolatedAsyncioTestCase):
         alex = next(e for e in result if e["name"] == "Alex")
         self.assertEqual(alex["owed-share"], 0)
         self.assertAlmostEqual(alex["paid-share"], 90.00, places=2)
+
+
+# ---------------------------------------------------------------------------
+# merge_user_shares
+# ---------------------------------------------------------------------------
+class TestMergeUserShares(unittest.TestCase):
+
+    def setUp(self):
+        self.running = _make_main()
+
+    def test_empty_list_returns_empty(self):
+        self.assertEqual(self.running.merge_user_shares([]), [])
+
+    def test_all_unique_ids_unchanged(self):
+        entries = [
+            {"name": "Alex", "userId": 1001, "paid-share": 10.0, "owed-share": 5.0},
+            {"name": "Jake", "userId": 1002, "paid-share": 0.0,  "owed-share": 5.0},
+        ]
+        result = self.running.merge_user_shares(entries)
+        self.assertEqual(len(result), 2)
+        self.assertAlmostEqual(sum(e["owed-share"] for e in result), 10.0, places=2)
+
+    def test_duplicate_ids_merged_into_one(self):
+        entries = [
+            {"name": "Alex", "userId": 1001, "paid-share": 0.0, "owed-share": 0.44},
+            {"name": "Alex", "userId": 1001, "paid-share": 0.0, "owed-share": 0.24},
+        ]
+        result = self.running.merge_user_shares(entries)
+        self.assertEqual(len(result), 1)
+
+    def test_duplicate_owed_shares_summed(self):
+        entries = [
+            {"name": "Alex", "userId": 1001, "paid-share": 0.0, "owed-share": 0.44},
+            {"name": "Alex", "userId": 1001, "paid-share": 0.0, "owed-share": 0.24},
+        ]
+        result = self.running.merge_user_shares(entries)
+        self.assertAlmostEqual(result[0]["owed-share"], 0.68, places=2)
+
+    def test_duplicate_paid_shares_summed(self):
+        entries = [
+            {"name": "Alex", "userId": 1001, "paid-share": 5.0, "owed-share": 3.0},
+            {"name": "Alex", "userId": 1001, "paid-share": 3.0, "owed-share": 2.0},
+        ]
+        result = self.running.merge_user_shares(entries)
+        self.assertAlmostEqual(result[0]["paid-share"], 8.0, places=2)
+        self.assertAlmostEqual(result[0]["owed-share"], 5.0, places=2)
+
+    def test_partial_duplicates_only_duplicates_merged(self):
+        entries = [
+            {"name": "Alex", "userId": 1001, "paid-share": 0.0, "owed-share": 0.44},
+            {"name": "Alex", "userId": 1001, "paid-share": 0.0, "owed-share": 0.24},
+            {"name": "Jake", "userId": 1002, "paid-share": 0.68, "owed-share": 0.0},
+        ]
+        result = self.running.merge_user_shares(entries)
+        self.assertEqual(len(result), 2)
+        alex = next(e for e in result if e["userId"] == 1001)
+        jake = next(e for e in result if e["userId"] == 1002)
+        self.assertAlmostEqual(alex["owed-share"], 0.68, places=2)
+        self.assertAlmostEqual(jake["paid-share"], 0.68, places=2)
+
+
+# ---------------------------------------------------------------------------
+# Regression: split transaction with same payee in both children (Bug 1)
+# ---------------------------------------------------------------------------
+class TestDuplicatePayeeRegression(unittest.IsolatedAsyncioTestCase):
+    """
+    Regression guard for the 'A person was included on this expense multiple
+    times' Splitwise error.  Triggered when a split transaction has the same
+    payee tagged in every child — each compute_shares call returned a separate
+    entry for that payee, causing Splitwise to reject the expense.
+    """
+
+    def setUp(self):
+        self.running = _make_main()
+        self.parent = load("split_same_payee_parent")
+        self.child1 = load("split_same_payee_child_1")
+        self.child2 = load("split_same_payee_child_2")
+        child_map = {
+            self.child1["getTransaction"]["id"]: self.child1,
+            self.child2["getTransaction"]["id"]: self.child2,
+        }
+        self.running.mm.get_transaction_details = AsyncMock(
+            side_effect=lambda tid: child_map[tid]
+        )
+
+    async def test_same_payee_in_both_children_appears_once(self):
+        """Alex is tagged in both children — must appear only once in the result."""
+        result = await self.running.build_user_share_entries(
+            self.parent, MOCK_GROUP_MEMBER_INFO
+        )
+        alex_entries = [e for e in result if e["name"] == "Alex"]
+        self.assertEqual(len(alex_entries), 1, "Alex should appear exactly once")
+
+    async def test_same_payee_owed_share_is_sum_of_children(self):
+        """Alex's owed-share must be the sum of both child amounts (0.44 + 0.24 = 0.68)."""
+        result = await self.running.build_user_share_entries(
+            self.parent, MOCK_GROUP_MEMBER_INFO
+        )
+        alex = next(e for e in result if e["name"] == "Alex")
+        self.assertAlmostEqual(alex["owed-share"], 0.68, places=2)
+
+    async def test_no_duplicate_user_ids_in_result(self):
+        """No userId should appear more than once — the invariant Splitwise enforces."""
+        result = await self.running.build_user_share_entries(
+            self.parent, MOCK_GROUP_MEMBER_INFO
+        )
+        user_ids = [e["userId"] for e in result]
+        self.assertEqual(len(user_ids), len(set(user_ids)), "Duplicate userId found in result")
+
+    async def test_root_paid_share_not_double_counted(self):
+        """When root user is tagged in multiple split children, paid-share must equal
+        parent amount once — not N × parent. Regression for a bug that was hidden by
+        the duplicate-user error but would have produced paid=1.36 for a 0.68 parent."""
+        result = await self.running.build_user_share_entries(
+            self.parent, MOCK_GROUP_MEMBER_INFO
+        )
+        alex = next(e for e in result if e["name"] == "Alex")
+        parent_amount = abs(self.parent["getTransaction"]["amount"])
+        self.assertAlmostEqual(alex["paid-share"], parent_amount, places=2)
+
+    async def test_split_same_payee_total_paid_equals_cost(self):
+        """sum(paid-share) must equal parent cost exactly — Splitwise's invariant."""
+        result = await self.running.build_user_share_entries(
+            self.parent, MOCK_GROUP_MEMBER_INFO
+        )
+        total_paid = sum(e["paid-share"] for e in result)
+        parent_amount = abs(self.parent["getTransaction"]["amount"])
+        self.assertAlmostEqual(total_paid, parent_amount, places=2)
+
+
+# ---------------------------------------------------------------------------
+# to_refund_shares
+# ---------------------------------------------------------------------------
+class TestToRefundShares(unittest.TestCase):
+    """Reverse-roles refund transformation.  See to_refund_shares docstring for model."""
+
+    def setUp(self):
+        self.running = _make_main()
+
+    def test_two_person_uneven_split(self):
+        """$20 refund, 70/30 split (root paid) → cost $6, root owes $6, friend paid $6."""
+        normal_shares = [
+            {"name": "Alex", "userId": 1001, "paid-share": 20.00, "owed-share": 14.00},
+            {"name": "Jake", "userId": 1002, "paid-share": 0.00,  "owed-share": 6.00},
+        ]
+        new_shares, new_cost = self.running.to_refund_shares(normal_shares)
+        self.assertAlmostEqual(new_cost, 6.00, places=2)
+        alex = next(e for e in new_shares if e["name"] == "Alex")
+        jake = next(e for e in new_shares if e["name"] == "Jake")
+        self.assertEqual(alex["paid-share"], 0)
+        self.assertAlmostEqual(alex["owed-share"], 6.00, places=2)
+        self.assertAlmostEqual(jake["paid-share"], 6.00, places=2)
+        self.assertEqual(jake["owed-share"], 0)
+
+    def test_three_person_even_split(self):
+        """$15 refund, 3-way even split → each non-root gets back $5, root owes $10."""
+        normal_shares = [
+            {"name": "Alex",    "userId": 1001, "paid-share": 15.00, "owed-share": 5.00},
+            {"name": "Jake",    "userId": 1002, "paid-share": 0.00,  "owed-share": 5.00},
+            {"name": "Jasmine", "userId": 1003, "paid-share": 0.00,  "owed-share": 5.00},
+        ]
+        new_shares, new_cost = self.running.to_refund_shares(normal_shares)
+        self.assertAlmostEqual(new_cost, 10.00, places=2)
+        alex = next(e for e in new_shares if e["name"] == "Alex")
+        self.assertAlmostEqual(alex["owed-share"], 10.00, places=2)
+        for other in ["Jake", "Jasmine"]:
+            entry = next(e for e in new_shares if e["name"] == other)
+            self.assertAlmostEqual(entry["paid-share"], 5.00, places=2)
+            self.assertEqual(entry["owed-share"], 0)
+
+    def test_sum_paid_equals_sum_owed_equals_cost(self):
+        """Splitwise invariant: sum(paid) == sum(owed) == cost."""
+        normal_shares = [
+            {"name": "Alex", "userId": 1001, "paid-share": 20.00, "owed-share": 14.00},
+            {"name": "Jake", "userId": 1002, "paid-share": 0.00,  "owed-share": 6.00},
+        ]
+        new_shares, new_cost = self.running.to_refund_shares(normal_shares)
+        self.assertAlmostEqual(sum(e["paid-share"] for e in new_shares), new_cost, places=2)
+        self.assertAlmostEqual(sum(e["owed-share"] for e in new_shares), new_cost, places=2)
+
+    def test_root_only_refund_has_zero_cost(self):
+        """If root was the only payee, no group balance changes — cost = 0 → will be skipped."""
+        normal_shares = [
+            {"name": "Alex", "userId": 1001, "paid-share": 30.00, "owed-share": 30.00},
+        ]
+        new_shares, new_cost = self.running.to_refund_shares(normal_shares)
+        self.assertEqual(new_cost, 0)
+
+    def test_balance_shift_matches_expected_math(self):
+        """$20 refund, 70/30 original. Friend's starting debt $30 → should become $24 (drop $6)."""
+        normal_shares = [
+            {"name": "Alex", "userId": 1001, "paid-share": 20.00, "owed-share": 14.00},
+            {"name": "Jake", "userId": 1002, "paid-share": 0.00,  "owed-share": 6.00},
+        ]
+        new_shares, _ = self.running.to_refund_shares(normal_shares)
+        jake = next(e for e in new_shares if e["name"] == "Jake")
+        # Jake net = paid - owed = +6 → debt decreases by $6 ✓
+        jake_net_change = jake["paid-share"] - jake["owed-share"]
+        self.assertAlmostEqual(jake_net_change, 6.00, places=2)
 
 
 if __name__ == "__main__":

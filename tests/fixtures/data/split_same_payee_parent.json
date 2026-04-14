@@ -1,0 +1,27 @@
+{
+    "getTransaction": {
+        "id": "100000000000000050",
+        "amount": -0.68,
+        "pending": false,
+        "isRecurring": false,
+        "date": "2026-01-23",
+        "originalDate": "2026-01-23",
+        "hideFromReports": false,
+        "needsReview": false,
+        "reviewedAt": null,
+        "reviewedByUser": null,
+        "plaidName": "DUPLICATE PAYEE MERCHANT",
+        "notes": null,
+        "hasSplitTransactions": true,
+        "isSplitTransaction": false,
+        "isManual": false,
+        "splitTransactions": [
+            {"id": "100000000000000051", "__typename": "Transaction"},
+            {"id": "100000000000000052", "__typename": "Transaction"}
+        ],
+        "originalTransaction": null,
+        "attachments": [],
+        "tags": [],
+        "__typename": "Transaction"
+    }
+}

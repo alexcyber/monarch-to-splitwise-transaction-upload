@@ -69,22 +69,41 @@ class Main():
         return detailed_transactions, tags
     
     async def build_user_share_entries(self, transaction, group_member_info):
+        '''Build the final list of per-user paid/owed shares for a transaction.
+
+        Walks the transaction (or each of its split children), delegates owed-share
+        computation to compute_shares, merges duplicate users, and assigns the full
+        paid-share to the root user — the single payer Splitwise requires.  Guarantees
+        exactly one entry per user and sum(paid-share) == transaction cost.'''
         user_shares = [] # list of complete expense entries a set of user_shares
         # Check if this object was split.  If so, then grab total price from original transaction
         if transaction['getTransaction']['hasSplitTransactions']:
             for transaction_child in transaction['getTransaction']['splitTransactions']:
-                transaction_child =  await self.mm.get_transaction_details(transaction_child['id'])
+                transaction_child = await self.mm.get_transaction_details(transaction_child['id'])
                 user_shares.append(await self.compute_shares(transaction_child, group_member_info)) # compute on a per split basis
         else:
             user_shares.append(await self.compute_shares(transaction, group_member_info)) # compute as a whole
         user_shares = self.flatten_list(user_shares)
+        user_shares = self.merge_user_shares(user_shares)
 
-        # Check if root user is mentioned as oweing a portion.  
-        # If root owes no part of the transaction, add root user for computational reasons. SW requires a payee
+        # Splitwise requires a payer. Root user holds the transaction on their account,
+        # so they are always the payer of the full amount. Update existing entry or inject.
         root_user_name = self.config['monarch_user_firstname']
-        if not any(p.get('name') == root_user_name for p in user_shares): # checks if root user is in user_shares list
-            user_shares.append(await self.compute_shares(transaction, group_member_info, name_list_override=[root_user_name], owed_share_array_override=[0])) # appends if not
-            user_shares = self.flatten_list(user_shares)
+        total_amount = abs(transaction['getTransaction']['amount'])
+        root_entry = next((e for e in user_shares if e['name'] == root_user_name), None)
+        if root_entry:
+            root_entry['paid-share'] = total_amount
+        else:
+            root_user_id = next(
+                (m['memberId'] for m in group_member_info if m['first_name'] == root_user_name),
+                None,
+            )
+            user_shares.append({
+                "name": root_user_name,
+                "userId": root_user_id,
+                "paid-share": total_amount,
+                "owed-share": 0,
+            })
 
         return user_shares
 
@@ -97,46 +116,87 @@ class Main():
                 flat.append(item)
         return flat
 
-    async def compute_shares(self, transaction, group_member_info, name_list_override = None, owed_share_array_override = None):
-        '''Takes a detailed monarch transaction and calculates what each user owes based on tags and splits'''    
+    def to_refund_shares(self, user_shares):
+        '''Transform normal-expense shares into refund-expense shares.
+
+        Semantics: a refund lands on root user's account. Only the non-root portion
+        of the refund belongs on the group ledger — root's own share simply returns
+        to them personally. In the resulting Splitwise expense the non-root payees
+        become "payers" (their debt decreases by their share of the refund) and
+        root becomes the sole "ower" of that reduced cost.
+
+        Example: $20 refund, original 70/30 split (root paid) →
+            Root:   paid=0,  owed=6     (non-root total)
+            Friend: paid=6,  owed=0
+            cost = 6
+
+        Done in integer cents (same convention as calculate_shares) to guarantee
+        no float drift.  Only converts back to dollars at the output boundary.
+
+        Returns (new_shares, new_cost).'''
+        root_user_name = self.config['monarch_user_firstname']
+        new_shares = []
+        new_cost_cents = 0
+        for entry in user_shares:
+            paid_cents = int(round(entry['paid-share'] * 100))
+            owed_cents = int(round(entry['owed-share'] * 100))
+            if entry['name'] == root_user_name:
+                new_owed_cents = paid_cents - owed_cents
+                new_shares.append({**entry, 'paid-share': 0, 'owed-share': round(new_owed_cents / 100, 2)})
+                new_cost_cents += new_owed_cents
+            else:
+                new_shares.append({**entry, 'paid-share': round(owed_cents / 100, 2), 'owed-share': 0})
+        return new_shares, round(new_cost_cents / 100, 2)
+
+    def merge_user_shares(self, user_shares):
+        '''Consolidate entries by userId, summing paid-share and owed-share.
+
+        Splitwise rejects an expense if the same user appears twice, so any path that
+        can produce duplicates (e.g. a payee tagged in multiple split children) must
+        funnel through here before the shares are submitted.'''
+        merged = {}
+        for entry in user_shares:
+            uid = entry['userId']
+            if uid in merged:
+                merged[uid]['paid-share'] = round(merged[uid]['paid-share'] + entry['paid-share'], 2)
+                merged[uid]['owed-share'] = round(merged[uid]['owed-share'] + entry['owed-share'], 2)
+            else:
+                merged[uid] = dict(entry)
+        return list(merged.values())
+
+    async def compute_shares(self, transaction, group_member_info):
+        '''Compute the owed-share distribution for a single transaction (or split child).
+
+        Reads payee-colored tags to decide who owes, then uses calculate_shares to
+        divide the amount evenly (cent-precise).  If no payee tags are present, falls
+        back to an even split across every member of group_member_info.  paid-share
+        is deliberately left at 0 — assigning it is the caller's responsibility so
+        that callers aggregating over multiple children don't end up double-counting.'''
+        # List of all names associated with a particular transaction
+        names = [
+            tag['name']
+            for tag in transaction['getTransaction']['tags']
+            if tag['color'] == self.config['key_tag_colors']['payee']
+        ]
+        if not names and group_member_info:
+            names = [m['first_name'] for m in group_member_info]
+
+        amount = abs(transaction['getTransaction']['amount'])
+        # creates an array of who owe's what.  When not easily divisible, the extra cent(s) are randomly assigned to an individual
+        owed_share_array = self.calculate_shares(amount, len(names))
+
         user_entry = [] # list of complete expense entries for a user
-        
-        # Overrides for when adding the root user when not mentioned in tagging.  Otherwise, compute shares as normal
-        if not name_list_override:
-            counter = 0
-            names = [] # List of all names associated with a particular transaction
-            for tag in transaction['getTransaction']['tags']:
-                if tag['color'] == self.config['key_tag_colors']['payee']:
-                    names.append(tag['name'])
-                    counter += 1
-        else:
-            counter = len(name_list_override)
-            names = name_list_override
-        if not owed_share_array_override:
-            # creates an array of who owe's what.  When not easily divisible, the extra cent(s) are randomly assigned to an individual
-            owed_share_array =  self.calculate_shares(transaction['getTransaction']['amount'] * -1, counter)
-        else:
-            owed_share_array = owed_share_array_override
-    
-        # Compiles user information and selects payee vs payer
         for name, owed_share in zip(names, owed_share_array):
-            paid_share = 0.00
-            userId = None
-            for member in group_member_info:
-                if member['first_name'] == name:
-                    userId = member['memberId']
-                    break
-            if name == self.config['monarch_user_firstname']:
-                if transaction['getTransaction']['isSplitTransaction']:
-                    paid_share = transaction['getTransaction']['originalTransaction']['amount'] * -1
-                else:
-                    paid_share = transaction['getTransaction']['amount'] * -1 
-            user_entry.append({"name": name,
-                            "userId": userId,
-                            "paid-share": paid_share,
-                            "owed-share": owed_share
-                            })
-        
+            userId = next(
+                (m['memberId'] for m in group_member_info if m['first_name'] == name),
+                None,
+            )
+            user_entry.append({
+                "name": name,
+                "userId": userId,
+                "paid-share": 0.00,
+                "owed-share": owed_share,
+            })
         return user_entry
 
     
@@ -255,15 +315,30 @@ class Main():
 
             '''
             Cost
+            Positive Monarch amount = refund/income; flip to a reverse-roles Splitwise
+            expense so the correct party's debt decreases.  Zero-amount transactions
+            are almost always a stray tag and get skipped.
             '''
-            expense_details['cost'] = transaction['getTransaction']['amount'] * -1
-            
+            raw_amount = transaction['getTransaction']['amount']
+            is_refund = raw_amount > 0
+            expense_details['cost'] = abs(raw_amount)
+            if expense_details['cost'] == 0:
+                print(f"SKIPPING $0 transaction (tag likely in error): "
+                      f"{transaction['getTransaction']['plaidName']} | {transaction['getTransaction']['date']}")
+                continue
+
             '''
             Calculate each user amount
             '''
             # If SW group member info was found
             if group_member_info:
-                expense_details['users'] = await self.build_user_share_entries(transaction, group_member_info)       
+                expense_details['users'] = await self.build_user_share_entries(transaction, group_member_info)
+                if is_refund:
+                    expense_details['users'], expense_details['cost'] = self.to_refund_shares(expense_details['users'])
+                    if expense_details['cost'] == 0:
+                        print(f"SKIPPING refund where only root user was tagged (no group balance change): "
+                              f"{transaction['getTransaction']['plaidName']} | {transaction['getTransaction']['date']}")
+                        continue
                     
             '''
             Description/SW Title
@@ -285,7 +360,8 @@ class Main():
             This part double checks SW entry and alters monarch tags to show the transaction has been processed
             '''
             if expense_Id:
-                print(f"""Successfully created an expense with the following details: 
+                expense_type = "refund" if is_refund else "expense"
+                print(f"""Successfully created a {expense_type} with the following details:
                     Expense Description: {expense_details['description']}
                     Expense Cost: {expense_details['cost']}
                     Group: {expense_details['groupId']['name']}""")
